@@ -13,6 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制代码
 COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
 
 # 创建非root用户
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app

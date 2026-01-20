@@ -41,7 +41,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://inference:${DB_PASSWORD:-inference_password}@postgres:5432/inference
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
-      - DEBUG=${DEBUG:-false}
+      - DEBUG=false
       - REGION=${REGION:-asia-east}
     depends_on:
       postgres:
@@ -54,6 +54,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
   # ==================== 本地Worker（可选） ====================
   # 如果服务器有GPU，可以同时运行Worker
