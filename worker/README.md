@@ -33,6 +33,23 @@ gpu-worker configure
 gpu-worker start
 ```
 
+### Using system Python / skip install
+
+If your server already has GPU dependencies installed globally, you can skip the virtual environment and auto-install:
+
+```bash
+npx gpu-worker configure --use-system-python
+npx gpu-worker start --use-system-python
+```
+
+You can also keep a venv but skip dependency installation:
+
+```bash
+npx gpu-worker configure --skip-install
+```
+
+On first run without a venv, the interactive CLI will prompt you to choose the mode.
+
 ## Requirements
 
 - **Node.js**: >= 16.0.0
@@ -40,6 +57,9 @@ gpu-worker start
 - **GPU**: NVIDIA GPU with CUDA 11.8+ (optional, for GPU inference)
 - **RAM**: 16GB+ recommended
 - **Storage**: 50GB+ for model storage
+
+CUDA note: the installer uses `nvidia-smi` to detect CUDA and selects `cu124` / `cu121` / `cu118` for PyTorch.
+CUDA 12.2/12.3 use `cu121`. Other versions fall back to CPU builds.
 
 ## Configuration
 
