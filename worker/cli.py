@@ -9,6 +9,7 @@ import argparse
 import subprocess
 import platform
 import shutil
+import re
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import json
@@ -73,13 +74,91 @@ def clear_screen():
     os.system('cls' if platform.system() == 'Windows' else 'clear')
 
 
+def _probe_nvidia_smi() -> Optional[Dict[str, Any]]:
+    """通过 nvidia-smi 获取 GPU 信息（无 PyTorch 时的兜底）"""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            return None
+
+        lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        if not lines:
+            return None
+
+        first = [part.strip() for part in lines[0].split(",")]
+        model = first[0] if first else "Unknown"
+        memory_gb = 0
+        if len(first) > 1:
+            try:
+                memory_gb = round(float(first[1]) / 1024, 1)
+            except ValueError:
+                memory_gb = 0
+
+        return {
+            "count": len(lines),
+            "model": model,
+            "memory_gb": memory_gb
+        }
+    except Exception:
+        return None
+
+
+def _detect_cuda_version() -> Optional[Dict[str, int]]:
+    """从 nvidia-smi 输出中解析 CUDA 版本"""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            return None
+
+        match = re.search(r"CUDA Version:\\s*(\\d+)\\.(\\d+)", result.stdout)
+        if not match:
+            return None
+
+        return {
+            "major": int(match.group(1)),
+            "minor": int(match.group(2))
+        }
+    except Exception:
+        return None
+
+
+def _select_torch_index_url(cuda_version: Optional[Dict[str, int]]) -> Optional[str]:
+    """根据 CUDA 版本选择 PyTorch 安装源"""
+    if not cuda_version:
+        return None
+
+    major = cuda_version["major"]
+    minor = cuda_version["minor"]
+    version_value = major * 100 + minor
+
+    if version_value >= 1204:
+        return "https://download.pytorch.org/whl/cu124"
+    if version_value >= 1201:
+        return "https://download.pytorch.org/whl/cu121"
+    if version_value >= 1108:
+        return "https://download.pytorch.org/whl/cu118"
+    return None
+
+
 def check_gpu():
     """检测GPU信息"""
     gpu_info = {
         "available": False,
         "count": 0,
         "model": "Unknown",
-        "memory_gb": 0
+        "memory_gb": 0,
+        "nvidia_detected": False,
+        "nvidia_model": None,
+        "nvidia_memory_gb": None,
+        "nvidia_count": 0
     }
 
     try:
@@ -92,6 +171,14 @@ def check_gpu():
             gpu_info["memory_gb"] = round(props.total_memory / 1024**3, 1)
     except ImportError:
         pass
+
+    if not gpu_info["available"]:
+        nvidia_info = _probe_nvidia_smi()
+        if nvidia_info:
+            gpu_info["nvidia_detected"] = True
+            gpu_info["nvidia_count"] = nvidia_info["count"]
+            gpu_info["nvidia_model"] = nvidia_info["model"]
+            gpu_info["nvidia_memory_gb"] = nvidia_info["memory_gb"]
 
     return gpu_info
 
@@ -121,6 +208,31 @@ def check_dependencies() -> Dict[str, bool]:
     return deps
 
 
+def _pip_install(
+    requirement: str,
+    progress_callback=None,
+    index_url: Optional[str] = None,
+    extra_args: Optional[List[str]] = None
+):
+    if progress_callback:
+        progress_callback(f"Installing {requirement}...")
+
+    command = [sys.executable, "-m", "pip", "install", requirement]
+    if index_url:
+        command.extend(["--index-url", index_url])
+    if extra_args:
+        command.extend(extra_args)
+
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        raise Exception(f"Failed to install {requirement}: {result.stderr}")
+
+
 def install_dependencies(progress_callback=None):
     """安装依赖"""
     requirements = [
@@ -137,18 +249,31 @@ def install_dependencies(progress_callback=None):
         "uvicorn>=0.23.0"
     ]
 
-    for req in requirements:
-        if progress_callback:
-            progress_callback(f"Installing {req}...")
+    cuda_version = _detect_cuda_version()
+    torch_index_url = _select_torch_index_url(cuda_version)
 
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", req],
-            capture_output=True,
-            text=True
+    if torch_index_url:
+        _pip_install(
+            "torch",
+            progress_callback,
+            index_url=torch_index_url,
+            extra_args=["--upgrade", "--force-reinstall"]
         )
+    else:
+        if cuda_version and progress_callback:
+            progress_callback(
+                f"检测到 CUDA {cuda_version['major']}.{cuda_version['minor']}，"
+                "无匹配的 PyTorch 版本，将安装 CPU 版"
+            )
+        _pip_install("torch>=2.0.0", progress_callback)
 
-        if result.returncode != 0:
-            raise Exception(f"Failed to install {req}: {result.stderr}")
+    non_torch_requirements = [
+        item for item in requirements
+        if not re.match(r"^torch([<>=!~].*)?$", item.strip())
+    ]
+
+    for req in non_torch_requirements:
+        _pip_install(req, progress_callback)
 
 
 def save_config(config: Dict[str, Any], path: str = CONFIG_FILE):
@@ -317,10 +442,25 @@ class ConfigWizard:
                 'enable_cpu_offload': gpu_info['memory_gb'] < 16
             }
         else:
-            if RICH_AVAILABLE:
-                console.print("[yellow]未检测到 GPU，将使用 CPU 模式（性能有限）[/yellow]")
+            nvidia_memory_gb = gpu_info.get("nvidia_memory_gb")
+            if gpu_info.get("nvidia_detected"):
+                if RICH_AVAILABLE:
+                    console.print("[yellow]检测到 NVIDIA GPU，但 CUDA 版 PyTorch 不可用，将使用 CPU 模式（性能有限）[/yellow]")
+                    console.print(f"  型号: {gpu_info.get('nvidia_model', 'Unknown')}")
+                    if nvidia_memory_gb:
+                        console.print(f"  显存: {nvidia_memory_gb} GB")
+                    console.print("[yellow]请安装 CUDA 版 PyTorch（例如：python -m pip install torch --index-url https://download.pytorch.org/whl/cu121）[/yellow]")
+                else:
+                    print("检测到 NVIDIA GPU，但 CUDA 版 PyTorch 不可用，将使用 CPU 模式（性能有限）")
+                    print(f"  型号: {gpu_info.get('nvidia_model', 'Unknown')}")
+                    if nvidia_memory_gb:
+                        print(f"  显存: {nvidia_memory_gb} GB")
+                    print("请安装 CUDA 版 PyTorch（例如：python -m pip install torch --index-url https://download.pytorch.org/whl/cu121）")
             else:
-                print("未检测到 GPU，将使用 CPU 模式（性能有限）")
+                if RICH_AVAILABLE:
+                    console.print("[yellow]未检测到 GPU，将使用 CPU 模式（性能有限）[/yellow]")
+                else:
+                    print("未检测到 GPU，将使用 CPU 模式（性能有限）")
 
             self.config['gpu'] = {
                 'model': 'CPU',
@@ -628,9 +768,17 @@ def cmd_status(args):
 
     # GPU信息
     gpu_info = check_gpu()
-    print(f"\nGPU: {gpu_info['model'] if gpu_info['available'] else '未检测到'}")
     if gpu_info['available']:
+        print(f"\nGPU: {gpu_info['model']}")
         print(f"显存: {gpu_info['memory_gb']} GB")
+    elif gpu_info.get("nvidia_detected"):
+        nvidia_memory_gb = gpu_info.get("nvidia_memory_gb")
+        print(f"\nGPU: {gpu_info.get('nvidia_model', 'Unknown')} (驱动可用，PyTorch CUDA 不可用)")
+        if nvidia_memory_gb:
+            print(f"显存: {nvidia_memory_gb} GB")
+        print("建议安装 CUDA 版 PyTorch（例如：python -m pip install torch --index-url https://download.pytorch.org/whl/cu121）")
+    else:
+        print("\nGPU: 未检测到")
 
     # 配置信息
     print(f"\n配置:")
