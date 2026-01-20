@@ -1,6 +1,6 @@
 {
   "name": "gpu-worker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Distributed GPU Inference Worker - Share idle GPU computing power for LLM and image generation",
   "keywords": [
     "gpu",
@@ -27,7 +27,7 @@
     "url": "https://github.com/Baozhi888/distributed-gpu-inference/issues"
   },
   "bin": {
-    "gpu-worker": "./bin/gpu-worker.js"
+    "gpu-worker": "bin/gpu-worker.js"
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
