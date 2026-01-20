@@ -55,6 +55,9 @@ jobs:
     needs: check-version
     if: needs.check-version.outputs.should_publish == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write  # Required for OIDC / Trusted Publishing
     steps:
       - uses: actions/checkout@v4
         with:
@@ -83,9 +86,9 @@ jobs:
         working-directory: worker
         run: npm install
 
-      - name: Publish to npm
+      - name: Publish to npm (with provenance)
         working-directory: worker
-        run: npm publish
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
