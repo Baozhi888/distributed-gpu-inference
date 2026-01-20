@@ -1,0 +1,11 @@
+# 更新后的服务端依赖
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+sqlalchemy[asyncio]>=2.0.0
+asyncpg>=0.28.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+redis>=4.5.0
+python-multipart>=0.0.6
+httpx>=0.25.0
+cryptography>=41.0.0

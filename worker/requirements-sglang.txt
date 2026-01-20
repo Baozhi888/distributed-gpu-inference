@@ -1,0 +1,12 @@
+# SGLang 高性能推理后端依赖
+# 安装: pip install -r requirements-sglang.txt
+
+# 核心依赖
+sglang[all]>=0.4.0
+
+# FlashInfer (可选，用于加速)
+# 请使用以下命令安装对应 CUDA 版本:
+# pip install flashinfer -i https://flashinfer.ai/whl/cu121/torch2.4/
+# pip install flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/
+
+# 注意: SGLang 需要 CUDA 12.1+ 和 Python 3.9+

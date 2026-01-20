@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPU算力管理平台 | GPU Compute Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status-online { background: #10b981; animation: pulse 2s infinite; }
+        .status-busy { background: #f59e0b; }
+        .status-offline { background: #6b7280; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .stat-card { transition: transform 0.2s, box-shadow 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="app" class="min-h-screen">
+        <!-- 顶部导航 -->
+        <nav class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 flex items-center">
+                            <svg class="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+                            </svg>
+                            <span class="ml-2 text-xl font-bold text-gray-900">{{ t('appName') }}</span>
+                        </div>
+                        <div class="hidden sm:ml-8 sm:flex sm:space-x-6">
+                            <button @click="currentView = 'dashboard'" :class="navClass('dashboard')">{{ t('nav.dashboard') }}</button>
+                            <button @click="currentView = 'workers'" :class="navClass('workers')">{{ t('nav.workers') }}</button>
+                            <button @click="currentView = 'enterprises'" :class="navClass('enterprises')">{{ t('nav.enterprises') }}</button>
+                            <button @click="currentView = 'usage'" :class="navClass('usage')">{{ t('nav.usage') }}</button>
+                            <button @click="currentView = 'bills'" :class="navClass('bills')">{{ t('nav.bills') }}</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <!-- 语言切换 -->
+                        <div class="flex items-center space-x-2">
+                            <button @click="setLang('zh')" :class="['px-2 py-1 text-xs rounded', lang === 'zh' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500']">中文</button>
+                            <button @click="setLang('en')" :class="['px-2 py-1 text-xs rounded', lang === 'en' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500']">EN</button>
+                        </div>
+                        <span class="text-sm text-gray-500">{{ currentTime }}</span>
+                        <div class="flex items-center">
+                            <span :class="['status-dot mr-2', isConnected ? 'status-online' : 'status-offline']"></span>
+                            <span class="text-sm text-gray-600">{{ isConnected ? t('connected') : t('disconnected') }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <!-- 仪表盘视图 -->
+            <div v-if="currentView === 'dashboard'">
+                <!-- 统计卡片 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="stat-card bg-white rounded-xl shadow-sm p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">{{ t('stats.onlineNodes') }}</p>
+                                <p class="mt-2 text-3xl font-bold text-gray-900">{{ stats.workers?.online || 0 }}</p>
+                            </div>
+                            <div class="p-3 bg-green-100 rounded-full">
+                                <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">{{ t('stats.totalNodes', { count: stats.workers?.total || 0 }) }}</p>
+                    </div>
+
+                    <div class="stat-card bg-white rounded-xl shadow-sm p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">{{ t('stats.todayJobs') }}</p>
+                                <p class="mt-2 text-3xl font-bold text-gray-900">{{ stats.today?.jobs || 0 }}</p>
+                            </div>
+                            <div class="p-3 bg-blue-100 rounded-full">
+                                <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">{{ t('stats.gpuHours', { hours: stats.today?.gpu_hours || 0 }) }}</p>
+                    </div>
+
+                    <div class="stat-card bg-white rounded-xl shadow-sm p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">{{ t('stats.todayRevenue') }}</p>
+                                <p class="mt-2 text-3xl font-bold text-gray-900">{{ formatCurrency(stats.today?.revenue || 0) }}</p>
+                            </div>
+                            <div class="p-3 bg-yellow-100 rounded-full">
+                                <svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">{{ t('stats.monthRevenue', { amount: formatCurrency(stats.this_month?.revenue || 0) }) }}</p>
+                    </div>
+
+                    <div class="stat-card bg-white rounded-xl shadow-sm p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500">{{ t('stats.enterprises') }}</p>
+                                <p class="mt-2 text-3xl font-bold text-gray-900">{{ stats.enterprises?.total || 0 }}</p>
+                            </div>
+                            <div class="p-3 bg-purple-100 rounded-full">
+                                <svg class="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">{{ t('stats.activeEnterprises') }}</p>
+                    </div>
+                </div>
+
+                <!-- 实时监控 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <!-- 在线节点 -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ t('realtime.nodeStatus') }}</h3>
+                        <div class="space-y-3 max-h-80 overflow-y-auto scrollbar-thin">
+                            <div v-for="worker in realtime.workers?.details || []" :key="worker.id"
+                                 class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
+                                 @click="viewWorkerDetail(worker.id)">
+                                <div class="flex items-center">
+                                    <span :class="['status-dot mr-3', worker.status === 'online' ? 'status-online' : 'status-busy']"></span>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900">{{ worker.name || worker.machine_id?.slice(0, 12) }}</p>
+                                        <p class="text-xs text-gray-500">{{ worker.gpu_model }} | {{ worker.region }}</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm font-medium" :class="worker.status === 'busy' ? 'text-yellow-600' : 'text-green-600'">
+                                        {{ worker.status === 'busy' ? t('status.working') : t('status.idle') }}
+                                    </p>
+                                    <p class="text-xs text-gray-500">{{ t('gpu.memory') }}: {{ worker.gpu_memory_used_gb || 0 }}/{{ worker.gpu_memory_gb }}GB</p>
+                                </div>
+                            </div>
+                            <div v-if="!realtime.workers?.details?.length" class="text-center py-8 text-gray-500">
+                                {{ t('realtime.noOnlineNodes') }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 运行中的任务 -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ t('realtime.runningJobs') }}</h3>
+                        <div class="space-y-3 max-h-80 overflow-y-auto scrollbar-thin">
+                            <div v-for="job in realtime.jobs?.details || []" :key="job.id"
+                                 class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900">{{ job.type.toUpperCase() }}</p>
+                                    <p class="text-xs text-gray-500">{{ t('job.id') }}: {{ job.id.slice(0, 8) }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm font-medium text-blue-600">{{ Math.round(job.duration_seconds) }}s</p>
+                                    <div class="w-20 h-1.5 bg-gray-200 rounded-full mt-1">
+                                        <div class="h-full bg-blue-600 rounded-full animate-pulse" style="width: 60%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-if="!realtime.jobs?.details?.length" class="text-center py-8 text-gray-500">
+                                {{ t('realtime.noRunningJobs') }}
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t flex justify-between text-sm text-gray-500">
+                            <span>{{ t('queue.queued') }}: {{ realtime.jobs?.queued || 0 }}</span>
+                            <span>{{ t('queue.running') }}: {{ realtime.jobs?.running || 0 }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 算力节点视图 -->
+            <div v-if="currentView === 'workers'">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">{{ t('workers.title') }}</h2>
+                    <div class="flex space-x-4">
+                        <select v-model="workerFilter.status" class="rounded-lg border-gray-300 text-sm">
+                            <option value="">{{ t('filter.allStatus') }}</option>
+                            <option value="online">{{ t('status.online') }}</option>
+                            <option value="busy">{{ t('status.busy') }}</option>
+                            <option value="offline">{{ t('status.offline') }}</option>
+                        </select>
+                        <select v-model="workerFilter.region" class="rounded-lg border-gray-300 text-sm">
+                            <option value="">{{ t('filter.allRegions') }}</option>
+                            <option v-for="r in regions" :key="r.code" :value="r.code">{{ r.name }}</option>
+                        </select>
+                        <button @click="exportWorkers" class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200">
+                            {{ t('workers.export') }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.nodeInfo') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.machineId') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.gpuInfo') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.system') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.location') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.reliability') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.stats') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.status') }}</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.actions') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr v-for="worker in workers.items" :key="worker.id" class="hover:bg-gray-50">
+                                    <td class="px-4 py-4 whitespace-nowrap">
+                                        <div class="flex items-center">
+                                            <span :class="['status-dot mr-3', getStatusClass(worker.status)]"></span>
+                                            <div>
+                                                <p class="text-sm font-medium text-gray-900">{{ worker.name || t('unnamed') }}</p>
+                                                <p class="text-xs text-gray-500">ID: {{ worker.id.slice(0, 8) }}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-4 whitespace-nowrap">
+                                        <div>
+                                            <code class="text-xs bg-gray-100 px-2 py-1 rounded block mb-1">{{ worker.machine_id?.slice(0, 16) || '-' }}...</code>
+                                            <button @click="copyMachineId(worker.machine_id)" class="text-xs text-indigo-600 hover:text-indigo-800">
+                                                {{ t('copy') }}
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-4">
+                                        <div class="text-sm">
+                                            <p class="font-medium text-gray-900">{{ worker.gpu_model || '-' }}</p>
+                                            <p class="text-xs text-gray-500">{{ t('gpu.memory') }}: {{ worker.gpu_memory_gb }}GB × {{ worker.gpu_count || 1 }}</p>
+                                            <p class="text-xs text-gray-500">{{ t('gpu.types') }}: {{ (worker.supported_types || []).join(', ') }}</p>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-4 whitespace-nowrap">
+                                        <div class="text-xs text-gray-500">
+                                            <p>CPU: {{ worker.cpu_cores || '-' }} {{ t('cores') }}</p>
+                                            <p>RAM: {{ worker.ram_gb || '-' }}GB</p>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-4 whitespace-nowrap">
+                                        <div class="text-sm">
+                                            <p class="text-gray-900">{{ getRegionName(worker.region) }}</p>
+                                            <p class="text-xs text-gray-500">{{ worker.city || worker.country || '-' }}</p>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-4 whitespace-nowrap">
+                                        <div class="flex items-center">
+                                            <div class="w-16 h-2 bg-gray-200 rounded-full mr-2">
+                                                <div class="h-full rounded-full" :class="getReliabilityColor(worker.reliability_score)"
+                                                     :style="{width: ((worker.reliability_score || 0) * 100) + '%'}"></div>
+                                            </div>
+                                            <span class="text-sm text-gray-600">{{ ((worker.reliability_score || 0) * 100).toFixed(0) }}%</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-4 whitespace-nowrap">
+                                        <div class="text-sm">
+                                            <p class="text-gray-900">{{ worker.completed_jobs || 0 }}/{{ worker.total_jobs || 0 }}</p>
+                                            <p class="text-xs text-gray-500">{{ t('successRate') }}: {{ ((worker.success_rate || 0) * 100).toFixed(1) }}%</p>
+                                            <p class="text-xs text-gray-500">{{ t('avgLatency') }}: {{ worker.avg_latency_ms || '-' }}ms</p>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-4 whitespace-nowrap">
+                                        <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusBadge(worker.status)]">
+                                            {{ getStatusText(worker.status) }}
+                                        </span>
+                                        <p class="text-xs text-gray-400 mt-1">{{ formatRelativeTime(worker.last_heartbeat) }}</p>
+                                    </td>
+                                    <td class="px-4 py-4 whitespace-nowrap text-sm">
+                                        <button @click="viewWorkerDetail(worker.id)" class="text-indigo-600 hover:text-indigo-900 mr-2">{{ t('detail') }}</button>
+                                        <button @click="openWorkerConfig(worker.id)" class="text-gray-600 hover:text-gray-900">{{ t('config') }}</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 分页 -->
+                <div class="mt-4 flex justify-between items-center">
+                    <p class="text-sm text-gray-500">{{ t('pagination.total', { count: workers.total || 0 }) }}</p>
+                    <div class="flex space-x-2">
+                        <button @click="workerPage--" :disabled="workerPage <= 1"
+                                class="px-3 py-1 text-sm rounded border disabled:opacity-50">{{ t('pagination.prev') }}</button>
+                        <span class="px-3 py-1 text-sm">{{ workerPage }}</span>
+                        <button @click="workerPage++"
+                                class="px-3 py-1 text-sm rounded border disabled:opacity-50">{{ t('pagination.next') }}</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Worker详情弹窗 -->
+            <div v-if="showWorkerDetail" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-6">
+                            <div>
+                                <h3 class="text-xl font-semibold text-gray-900">{{ t('workerDetail.title') }}</h3>
+                                <p class="text-sm text-gray-500">{{ selectedWorker?.name || t('unnamed') }}</p>
+                            </div>
+                            <button @click="showWorkerDetail = false" class="text-gray-400 hover:text-gray-600">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div v-if="selectedWorker" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- 基础信息 -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h4 class="font-medium text-gray-900 mb-3">{{ t('workerDetail.basicInfo') }}</h4>
+                                <dl class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">Worker ID</dt>
+                                        <dd class="text-gray-900 font-mono">{{ selectedWorker.id }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('table.machineId') }}</dt>
+                                        <dd class="text-gray-900 font-mono text-xs">{{ selectedWorker.machine_id }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">Hardware Hash</dt>
+                                        <dd class="text-gray-900 font-mono text-xs truncate max-w-48">{{ selectedWorker.hardware_hash || '-' }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('status.label') }}</dt>
+                                        <dd><span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusBadge(selectedWorker.status)]">
+                                            {{ getStatusText(selectedWorker.status) }}
+                                        </span></dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('registered') }}</dt>
+                                        <dd class="text-gray-900">{{ formatDateTime(selectedWorker.registered_at) }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('lastHeartbeat') }}</dt>
+                                        <dd class="text-gray-900">{{ formatDateTime(selectedWorker.last_heartbeat) }}</dd>
+                                    </div>
+                                </dl>
+                            </div>
+
+                            <!-- GPU信息 -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h4 class="font-medium text-gray-900 mb-3">{{ t('workerDetail.gpuInfo') }}</h4>
+                                <dl class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('gpu.model') }}</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.gpu_model || '-' }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('gpu.memory') }}</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.gpu_memory_gb }}GB × {{ selectedWorker.gpu_count || 1 }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('gpu.types') }}</dt>
+                                        <dd class="text-gray-900">{{ (selectedWorker.supported_types || []).join(', ') || '-' }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('gpu.models') }}</dt>
+                                        <dd class="text-gray-900 text-xs">{{ (selectedWorker.loaded_models || []).join(', ') || '-' }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">CPU</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.cpu_cores || '-' }} {{ t('cores') }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">RAM</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.ram_gb || '-' }}GB</dd>
+                                    </div>
+                                </dl>
+                            </div>
+
+                            <!-- 地理位置 -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h4 class="font-medium text-gray-900 mb-3">{{ t('workerDetail.location') }}</h4>
+                                <dl class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('region') }}</dt>
+                                        <dd class="text-gray-900">{{ getRegionName(selectedWorker.region) }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('country') }}</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.country || '-' }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('city') }}</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.city || '-' }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('timezone') }}</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.timezone || '-' }}</dd>
+                                    </div>
+                                </dl>
+                            </div>
+
+                            <!-- 性能指标 -->
+                            <div class="bg-gray-50 rounded-lg p-4">
+                                <h4 class="font-medium text-gray-900 mb-3">{{ t('workerDetail.performance') }}</h4>
+                                <dl class="space-y-2 text-sm">
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('reliability') }}</dt>
+                                        <dd class="text-gray-900">{{ ((selectedWorker.reliability_score || 0) * 100).toFixed(1) }}%</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('successRate') }}</dt>
+                                        <dd class="text-gray-900">{{ ((selectedWorker.success_rate || 0) * 100).toFixed(1) }}%</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('avgLatency') }}</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.avg_latency_ms || '-' }}ms</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('totalOnline') }}</dt>
+                                        <dd class="text-gray-900">{{ formatDuration(selectedWorker.total_online_seconds) }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('totalJobs') }}</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.total_jobs || 0 }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('completedJobs') }}</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.completed_jobs || 0 }}</dd>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <dt class="text-gray-500">{{ t('failedJobs') }}</dt>
+                                        <dd class="text-gray-900">{{ selectedWorker.failed_jobs || 0 }}</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        </div>
+
+                        <!-- 24小时使用统计 -->
+                        <div v-if="workerUsage24h" class="mt-6 bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-medium text-gray-900 mb-3">{{ t('workerDetail.usage24h') }}</h4>
+                            <div class="grid grid-cols-3 gap-4 text-center">
+                                <div>
+                                    <p class="text-2xl font-bold text-gray-900">{{ workerUsage24h.total_jobs || 0 }}</p>
+                                    <p class="text-sm text-gray-500">{{ t('jobs') }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-bold text-gray-900">{{ (workerUsage24h.total_gpu_seconds / 3600 || 0).toFixed(2) }}</p>
+                                    <p class="text-sm text-gray-500">GPU {{ t('hours') }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-bold text-gray-900">{{ formatCurrency(workerUsage24h.total_revenue || 0) }}</p>
+                                    <p class="text-sm text-gray-500">{{ t('revenue') }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 企业管理视图 -->
+            <div v-if="currentView === 'enterprises'">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">{{ t('enterprises.title') }}</h2>
+                    <button @click="showCreateEnterprise = true"
+                            class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
+                        {{ t('enterprises.add') }}
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('enterprise.info') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('enterprise.contact') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('enterprise.balance') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('enterprise.budget') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('enterprise.privacy') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.status') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.actions') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="ent in enterprises.items" :key="ent.id" class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <p class="text-sm font-medium text-gray-900">{{ ent.name }}</p>
+                                    <p class="text-xs text-gray-500">{{ ent.code }}</p>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <p class="text-sm text-gray-900">{{ ent.contact_name || '-' }}</p>
+                                    <p class="text-xs text-gray-500">{{ ent.contact_email || '-' }}</p>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <p class="text-sm font-medium" :class="ent.credit_balance < 0 ? 'text-red-600' : 'text-gray-900'">
+                                        {{ formatCurrency(ent.credit_balance || 0) }}
+                                    </p>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ ent.monthly_budget ? formatCurrency(ent.monthly_budget) : t('unlimited') }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex space-x-2">
+                                        <span v-if="ent.anonymize_data" class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">{{ t('privacy.anonymized') }}</span>
+                                        <span v-if="ent.private_deployment" class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded">{{ t('privacy.private') }}</span>
+                                        <span v-if="!ent.allow_logging" class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">{{ t('privacy.noLog') }}</span>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span :class="['px-2 py-1 text-xs font-medium rounded-full', ent.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800']">
+                                        {{ ent.is_active ? t('active') : t('inactive') }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <button @click="viewEnterpriseDetail(ent.id)" class="text-indigo-600 hover:text-indigo-900 mr-3">{{ t('detail') }}</button>
+                                    <button @click="manageApiKeys(ent.id)" class="text-gray-600 hover:text-gray-900">API Keys</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 使用记录视图 -->
+            <div v-if="currentView === 'usage'">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">{{ t('usage.title') }}</h2>
+                    <div class="flex space-x-4">
+                        <input type="date" v-model="usageFilter.startDate" class="rounded-lg border-gray-300 text-sm">
+                        <input type="date" v-model="usageFilter.endDate" class="rounded-lg border-gray-300 text-sm">
+                        <select v-model="usageFilter.groupBy" class="rounded-lg border-gray-300 text-sm">
+                            <option value="worker">{{ t('groupBy.worker') }}</option>
+                            <option value="enterprise">{{ t('groupBy.enterprise') }}</option>
+                            <option value="type">{{ t('groupBy.type') }}</option>
+                            <option value="region">{{ t('groupBy.region') }}</option>
+                        </select>
+                        <button @click="loadUsageSummary" class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg">{{ t('query') }}</button>
+                        <button @click="exportUsage" class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg">{{ t('export') }}</button>
+                    </div>
+                </div>
+
+                <!-- 使用量汇总 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h4 class="text-sm font-medium text-gray-500 mb-2">{{ t('usage.totalJobs') }}</h4>
+                        <p class="text-3xl font-bold text-gray-900">{{ usageSummary.totalJobs || 0 }}</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h4 class="text-sm font-medium text-gray-500 mb-2">{{ t('usage.totalGpuTime') }}</h4>
+                        <p class="text-3xl font-bold text-gray-900">{{ (usageSummary.totalGpuHours || 0).toFixed(1) }} <span class="text-lg">{{ t('hours') }}</span></p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h4 class="text-sm font-medium text-gray-500 mb-2">{{ t('usage.totalRevenue') }}</h4>
+                        <p class="text-3xl font-bold text-gray-900">{{ formatCurrency(usageSummary.totalRevenue || 0) }}</p>
+                    </div>
+                </div>
+
+                <!-- 使用记录表 -->
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('time') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.machineId') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('jobType') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('model') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('usage.quantity') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">GPU {{ t('time') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('cost') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="record in usageRecords.items" :key="record.id" class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ formatDateTime(record.created_at) }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <code class="text-xs bg-gray-100 px-2 py-1 rounded">{{ record.machine_id?.slice(0, 12) }}</code>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">{{ record.job_type }}</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ record.model_id?.split('/').pop() || '-' }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {{ record.quantity?.toFixed(2) }} {{ record.unit }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ (record.gpu_seconds || 0).toFixed(1) }}s
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ formatCurrency(record.total_cost || 0) }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 账单视图 -->
+            <div v-if="currentView === 'bills'">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">{{ t('bills.title') }}</h2>
+                    <select v-model="billFilter.status" class="rounded-lg border-gray-300 text-sm">
+                        <option value="">{{ t('filter.allStatus') }}</option>
+                        <option value="pending">{{ t('bill.pending') }}</option>
+                        <option value="paid">{{ t('bill.paid') }}</option>
+                        <option value="overdue">{{ t('bill.overdue') }}</option>
+                    </select>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('bill.number') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('enterprise.label') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('bill.period') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('bill.amount') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.status') }}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ t('table.actions') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr v-for="bill in bills.items" :key="bill.id" class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <p class="text-sm font-medium text-gray-900">{{ bill.invoice_number || bill.id.slice(0, 8) }}</p>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ bill.enterprise_id.slice(0, 8) }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ formatDate(bill.period_start) }} - {{ formatDate(bill.period_end) }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ formatCurrency(bill.total || 0) }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span :class="['px-2 py-1 text-xs font-medium rounded-full', getBillStatusBadge(bill.status)]">
+                                        {{ getBillStatusText(bill.status) }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <button @click="viewBillDetail(bill.id)" class="text-indigo-600 hover:text-indigo-900">{{ t('view') }}</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <!-- 创建企业弹窗 -->
+        <div v-if="showCreateEnterprise" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">{{ t('enterprises.add') }}</h3>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('enterprise.name') }} *</label>
+                            <input v-model="newEnterprise.name" type="text" class="w-full rounded-lg border-gray-300">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('enterprise.code') }} *</label>
+                            <input v-model="newEnterprise.code" type="text" class="w-full rounded-lg border-gray-300">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('enterprise.contact') }}</label>
+                            <input v-model="newEnterprise.contact_name" type="text" class="w-full rounded-lg border-gray-300">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('enterprise.email') }}</label>
+                            <input v-model="newEnterprise.contact_email" type="email" class="w-full rounded-lg border-gray-300">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('enterprise.budget') }}</label>
+                            <input v-model="newEnterprise.monthly_budget" type="number" class="w-full rounded-lg border-gray-300">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('enterprise.retention') }}</label>
+                            <input v-model="newEnterprise.data_retention_days" type="number" class="w-full rounded-lg border-gray-300">
+                        </div>
+                    </div>
+                    <div class="border-t pt-4">
+                        <h4 class="text-sm font-medium text-gray-700 mb-2">{{ t('enterprise.privacySettings') }}</h4>
+                        <div class="space-y-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" v-model="newEnterprise.allow_logging" class="rounded border-gray-300 text-indigo-600 mr-2">
+                                <span class="text-sm text-gray-600">{{ t('privacy.allowLogging') }}</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" v-model="newEnterprise.anonymize_data" class="rounded border-gray-300 text-indigo-600 mr-2">
+                                <span class="text-sm text-gray-600">{{ t('privacy.anonymizeData') }}</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button @click="showCreateEnterprise = false" class="px-4 py-2 text-gray-700 hover:text-gray-900">{{ t('cancel') }}</button>
+                    <button @click="createEnterprise" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">{{ t('create') }}</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 企业隐私设置弹窗 -->
+        <div v-if="showPrivacySettings" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-900">{{ t('privacyModal.title') }}</h3>
+                            <p class="text-sm text-gray-500">{{ selectedEnterprise?.name }}</p>
+                        </div>
+                        <button @click="showPrivacySettings = false" class="text-gray-400 hover:text-gray-600">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div v-if="privacySettings" class="space-y-6">
+                        <!-- 隐私设置 -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-medium text-gray-900 mb-4">{{ t('privacyModal.settings') }}</h4>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-700">{{ t('privacy.allowLogging') }}</p>
+                                        <p class="text-xs text-gray-500">{{ t('privacyModal.loggingDesc') }}</p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" v-model="privacySettings.allow_logging" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                    </label>
+                                </div>
+
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-700">{{ t('privacy.anonymizeData') }}</p>
+                                        <p class="text-xs text-gray-500">{{ t('privacyModal.anonymizeDesc') }}</p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" v-model="privacySettings.anonymize_data" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                    </label>
+                                </div>
+
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-700">{{ t('privacyModal.privateDeployment') }}</p>
+                                        <p class="text-xs text-gray-500">{{ t('privacyModal.privateDesc') }}</p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" v-model="privacySettings.private_deployment" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                    </label>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">{{ t('enterprise.retention') }}</label>
+                                    <p class="text-xs text-gray-500 mb-2">{{ t('privacyModal.retentionDesc') }}</p>
+                                    <input type="number" v-model="privacySettings.data_retention_days" min="7" max="365" class="w-full rounded-lg border-gray-300">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 合规状态 -->
+                        <div v-if="complianceReport" class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-medium text-gray-900 mb-4">{{ t('privacyModal.compliance') }}</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="flex items-center">
+                                    <span :class="['w-3 h-3 rounded-full mr-2', complianceReport.compliance_status?.retention_policy_configured ? 'bg-green-500' : 'bg-yellow-500']"></span>
+                                    <span class="text-sm text-gray-700">{{ t('privacyModal.retentionConfigured') }}</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <span :class="['w-3 h-3 rounded-full mr-2', complianceReport.compliance_status?.retention_policy_enforced ? 'bg-green-500' : 'bg-yellow-500']"></span>
+                                    <span class="text-sm text-gray-700">{{ t('privacyModal.retentionEnforced') }}</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <span :class="['w-3 h-3 rounded-full mr-2', complianceReport.compliance_status?.logging_controlled ? 'bg-green-500' : 'bg-yellow-500']"></span>
+                                    <span class="text-sm text-gray-700">{{ t('privacyModal.loggingControlled') }}</span>
+                                </div>
+                                <div class="flex items-center">
+                                    <span :class="['w-3 h-3 rounded-full mr-2', complianceReport.compliance_status?.anonymization_enabled ? 'bg-green-500' : 'bg-gray-300']"></span>
+                                    <span class="text-sm text-gray-700">{{ t('privacyModal.anonymizationEnabled') }}</span>
+                                </div>
+                            </div>
+
+                            <!-- 建议 -->
+                            <div v-if="complianceReport.recommendations?.length" class="mt-4 pt-4 border-t">
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">{{ t('privacyModal.recommendations') }}</h5>
+                                <ul class="space-y-1">
+                                    <li v-for="rec in complianceReport.recommendations" :key="rec" class="text-sm text-yellow-700 flex items-start">
+                                        <svg class="w-4 h-4 mr-1.5 flex-shrink-0 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        {{ rec }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- 数据保留状态 -->
+                        <div v-if="retentionStatus" class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-medium text-gray-900 mb-4">{{ t('privacyModal.dataStatus') }}</h4>
+                            <div class="grid grid-cols-3 gap-4 text-center">
+                                <div>
+                                    <p class="text-2xl font-bold text-gray-900">{{ retentionStatus.total_records || 0 }}</p>
+                                    <p class="text-sm text-gray-500">{{ t('privacyModal.totalRecords') }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-bold" :class="retentionStatus.expired_records > 0 ? 'text-yellow-600' : 'text-green-600'">
+                                        {{ retentionStatus.expired_records || 0 }}
+                                    </p>
+                                    <p class="text-sm text-gray-500">{{ t('privacyModal.expiredRecords') }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-bold text-gray-900">{{ retentionStatus.retention_days || 30 }}</p>
+                                    <p class="text-sm text-gray-500">{{ t('privacyModal.retentionDays') }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 操作按钮 -->
+                        <div class="flex flex-wrap gap-3 pt-4 border-t">
+                            <button @click="savePrivacySettings" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">
+                                {{ t('save') }}
+                            </button>
+                            <button @click="runDataCleanup" class="px-4 py-2 bg-yellow-500 text-white text-sm font-medium rounded-lg hover:bg-yellow-600">
+                                {{ t('privacyModal.runCleanup') }}
+                            </button>
+                            <button @click="exportEnterpriseData" class="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700">
+                                {{ t('privacyModal.exportData') }}
+                            </button>
+                            <button @click="confirmDeleteData" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700">
+                                {{ t('privacyModal.deleteData') }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } = Vue;
+
+    // 多语言支持
+    const i18n = {
+        zh: {
+            appName: 'GPU算力平台',
+            connected: '已连接',
+            disconnected: '断开连接',
+            nav: { dashboard: '仪表盘', workers: '算力节点', enterprises: '企业管理', usage: '使用记录', bills: '账单中心' },
+            stats: {
+                onlineNodes: '在线节点', totalNodes: '共 {count} 个节点', todayJobs: '今日任务',
+                gpuHours: 'GPU时间: {hours} 小时', todayRevenue: '今日收入', monthRevenue: '本月: {amount}',
+                enterprises: '企业客户', activeEnterprises: '活跃企业'
+            },
+            realtime: { nodeStatus: '实时节点状态', runningJobs: '运行中的任务', noOnlineNodes: '暂无在线节点', noRunningJobs: '暂无运行中的任务' },
+            status: { online: '在线', busy: '工作中', offline: '离线', goingOffline: '下线中', working: '工作中', idle: '空闲', label: '状态' },
+            queue: { queued: '队列中', running: '运行中' },
+            workers: { title: '算力节点管理', export: '导出' },
+            filter: { allStatus: '全部状态', allRegions: '全部区域' },
+            table: { nodeInfo: '节点信息', machineId: '机器码', gpuInfo: 'GPU信息', system: '系统', location: '位置', reliability: '可靠性', stats: '统计', status: '状态', actions: '操作' },
+            gpu: { memory: '显存', types: '任务类型', model: '型号', models: '已加载模型' },
+            pagination: { total: '共 {count} 个节点', prev: '上一页', next: '下一页' },
+            unnamed: '未命名',
+            copy: '复制',
+            cores: '核心',
+            successRate: '成功率',
+            avgLatency: '平均延迟',
+            detail: '详情',
+            config: '配置',
+            workerDetail: { title: 'Worker 详情', basicInfo: '基础信息', gpuInfo: 'GPU信息', location: '地理位置', performance: '性能指标', usage24h: '24小时使用统计' },
+            registered: '注册时间',
+            lastHeartbeat: '最后心跳',
+            region: '区域',
+            country: '国家',
+            city: '城市',
+            timezone: '时区',
+            reliability: '可靠性',
+            totalOnline: '总在线时长',
+            totalJobs: '总任务数',
+            completedJobs: '完成任务',
+            failedJobs: '失败任务',
+            jobs: '任务',
+            hours: '小时',
+            revenue: '收入',
+            enterprises: { title: '企业管理', add: '添加企业' },
+            enterprise: { info: '企业信息', contact: '联系人', balance: '账户余额', budget: '月度预算', privacy: '隐私设置', name: '企业名称', code: '企业代码', email: '邮箱', retention: '数据保留天数', privacySettings: '隐私设置', label: '企业' },
+            privacy: { anonymized: '匿名化', private: '私有部署', noLog: '无日志', allowLogging: '允许记录日志', anonymizeData: '数据匿名化' },
+            privacyModal: {
+                title: '隐私设置管理', settings: '隐私设置', compliance: '合规状态', dataStatus: '数据状态',
+                loggingDesc: '允许系统记录请求和响应日志用于调试和分析', anonymizeDesc: '自动对敏感数据进行匿名化处理',
+                privateDeployment: '私有化部署', privateDesc: '启用专属计算节点，数据不与其他企业共享',
+                retentionDesc: '数据保留天数，过期数据将被自动清理（7-365天）',
+                retentionConfigured: '保留策略已配置', retentionEnforced: '保留策略已执行',
+                loggingControlled: '日志控制已启用', anonymizationEnabled: '匿名化已启用',
+                recommendations: '改进建议', totalRecords: '总记录数', expiredRecords: '过期记录',
+                retentionDays: '保留天数', runCleanup: '执行清理', exportData: '导出数据', deleteData: '删除数据'
+            },
+            save: '保存',
+            unlimited: '不限',
+            active: '活跃',
+            inactive: '停用',
+            usage: { title: '使用记录', totalJobs: '总任务数', totalGpuTime: '总GPU时间', totalRevenue: '总收入', quantity: '使用量' },
+            groupBy: { worker: '按节点', enterprise: '按企业', type: '按类型', region: '按区域' },
+            query: '查询',
+            export: '导出',
+            time: '时间',
+            jobType: '任务类型',
+            model: '模型',
+            cost: '费用',
+            bills: { title: '账单中心' },
+            bill: { number: '账单号', period: '账期', amount: '金额', pending: '待支付', paid: '已支付', overdue: '逾期' },
+            view: '查看',
+            cancel: '取消',
+            create: '创建',
+            job: { id: '任务ID' }
+        },
+        en: {
+            appName: 'GPU Compute Platform',
+            connected: 'Connected',
+            disconnected: 'Disconnected',
+            nav: { dashboard: 'Dashboard', workers: 'Workers', enterprises: 'Enterprises', usage: 'Usage', bills: 'Billing' },
+            stats: {
+                onlineNodes: 'Online Nodes', totalNodes: '{count} nodes total', todayJobs: 'Today Jobs',
+                gpuHours: 'GPU Hours: {hours}h', todayRevenue: 'Today Revenue', monthRevenue: 'This month: {amount}',
+                enterprises: 'Enterprises', activeEnterprises: 'Active'
+            },
+            realtime: { nodeStatus: 'Real-time Node Status', runningJobs: 'Running Jobs', noOnlineNodes: 'No online nodes', noRunningJobs: 'No running jobs' },
+            status: { online: 'Online', busy: 'Busy', offline: 'Offline', goingOffline: 'Going Offline', working: 'Working', idle: 'Idle', label: 'Status' },
+            queue: { queued: 'Queued', running: 'Running' },
+            workers: { title: 'Worker Management', export: 'Export' },
+            filter: { allStatus: 'All Status', allRegions: 'All Regions' },
+            table: { nodeInfo: 'Node Info', machineId: 'Machine ID', gpuInfo: 'GPU Info', system: 'System', location: 'Location', reliability: 'Reliability', stats: 'Stats', status: 'Status', actions: 'Actions' },
+            gpu: { memory: 'Memory', types: 'Task Types', model: 'Model', models: 'Loaded Models' },
+            pagination: { total: '{count} nodes total', prev: 'Prev', next: 'Next' },
+            unnamed: 'Unnamed',
+            copy: 'Copy',
+            cores: 'cores',
+            successRate: 'Success Rate',
+            avgLatency: 'Avg Latency',
+            detail: 'Detail',
+            config: 'Config',
+            workerDetail: { title: 'Worker Detail', basicInfo: 'Basic Info', gpuInfo: 'GPU Info', location: 'Location', performance: 'Performance', usage24h: '24h Usage' },
+            registered: 'Registered',
+            lastHeartbeat: 'Last Heartbeat',
+            region: 'Region',
+            country: 'Country',
+            city: 'City',
+            timezone: 'Timezone',
+            reliability: 'Reliability',
+            totalOnline: 'Total Online',
+            totalJobs: 'Total Jobs',
+            completedJobs: 'Completed',
+            failedJobs: 'Failed',
+            jobs: 'Jobs',
+            hours: 'hours',
+            revenue: 'Revenue',
+            enterprises: { title: 'Enterprise Management', add: 'Add Enterprise' },
+            enterprise: { info: 'Enterprise Info', contact: 'Contact', balance: 'Balance', budget: 'Monthly Budget', privacy: 'Privacy', name: 'Name', code: 'Code', email: 'Email', retention: 'Data Retention Days', privacySettings: 'Privacy Settings', label: 'Enterprise' },
+            privacy: { anonymized: 'Anonymized', private: 'Private', noLog: 'No Log', allowLogging: 'Allow Logging', anonymizeData: 'Anonymize Data' },
+            privacyModal: {
+                title: 'Privacy Settings', settings: 'Privacy Settings', compliance: 'Compliance Status', dataStatus: 'Data Status',
+                loggingDesc: 'Allow system to log requests and responses for debugging', anonymizeDesc: 'Automatically anonymize sensitive data',
+                privateDeployment: 'Private Deployment', privateDesc: 'Use dedicated compute nodes, data not shared',
+                retentionDesc: 'Data retention days, expired data will be auto-cleaned (7-365 days)',
+                retentionConfigured: 'Retention Policy Configured', retentionEnforced: 'Retention Policy Enforced',
+                loggingControlled: 'Logging Controlled', anonymizationEnabled: 'Anonymization Enabled',
+                recommendations: 'Recommendations', totalRecords: 'Total Records', expiredRecords: 'Expired Records',
+                retentionDays: 'Retention Days', runCleanup: 'Run Cleanup', exportData: 'Export Data', deleteData: 'Delete Data'
+            },
+            save: 'Save',
+            unlimited: 'Unlimited',
+            active: 'Active',
+            inactive: 'Inactive',
+            usage: { title: 'Usage Records', totalJobs: 'Total Jobs', totalGpuTime: 'Total GPU Time', totalRevenue: 'Total Revenue', quantity: 'Quantity' },
+            groupBy: { worker: 'By Worker', enterprise: 'By Enterprise', type: 'By Type', region: 'By Region' },
+            query: 'Query',
+            export: 'Export',
+            time: 'Time',
+            jobType: 'Job Type',
+            model: 'Model',
+            cost: 'Cost',
+            bills: { title: 'Billing Center' },
+            bill: { number: 'Invoice #', period: 'Period', amount: 'Amount', pending: 'Pending', paid: 'Paid', overdue: 'Overdue' },
+            view: 'View',
+            cancel: 'Cancel',
+            create: 'Create',
+            job: { id: 'Job ID' }
+        }
+    };
+
+    const regions = [
+        { code: 'asia-east', name: { zh: '东亚', en: 'East Asia' } },
+        { code: 'asia-south', name: { zh: '东南亚', en: 'Southeast Asia' } },
+        { code: 'europe-west', name: { zh: '西欧', en: 'Western Europe' } },
+        { code: 'europe-east', name: { zh: '东欧', en: 'Eastern Europe' } },
+        { code: 'america-north', name: { zh: '北美', en: 'North America' } },
+        { code: 'america-south', name: { zh: '南美', en: 'South America' } },
+        { code: 'oceania', name: { zh: '大洋洲', en: 'Oceania' } }
+    ];
+
+    createApp({
+        setup() {
+            const API_BASE = '/api/v1/admin';
+            const lang = ref(localStorage.getItem('lang') || 'zh');
+            const currentView = ref('dashboard');
+            const currentTime = ref('');
+            const isConnected = ref(true);
+
+            const stats = ref({});
+            const realtime = ref({ workers: { details: [] }, jobs: { details: [] } });
+            const workers = ref({ items: [], total: 0 });
+            const enterprises = ref({ items: [], total: 0 });
+            const usageRecords = ref({ items: [], total: 0 });
+            const usageSummary = ref({});
+            const bills = ref({ items: [], total: 0 });
+
+            const workerFilter = reactive({ status: '', region: '' });
+            const workerPage = ref(1);
+            const usageFilter = reactive({
+                startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                endDate: new Date().toISOString().split('T')[0],
+                groupBy: 'worker'
+            });
+            const billFilter = reactive({ status: '' });
+
+            const showCreateEnterprise = ref(false);
+            const showWorkerDetail = ref(false);
+            const selectedWorker = ref(null);
+            const workerUsage24h = ref(null);
+            const newEnterprise = reactive({
+                name: '', code: '', contact_name: '', contact_email: '', monthly_budget: null,
+                data_retention_days: 30, allow_logging: true, anonymize_data: false
+            });
+
+            // 隐私设置相关状态
+            const showPrivacySettings = ref(false);
+            const selectedEnterprise = ref(null);
+            const privacySettings = ref(null);
+            const complianceReport = ref(null);
+            const retentionStatus = ref(null);
+
+            // 翻译函数
+            function t(key, params = {}) {
+                const keys = key.split('.');
+                let value = i18n[lang.value];
+                for (const k of keys) {
+                    value = value?.[k];
+                }
+                if (typeof value === 'string') {
+                    return value.replace(/\{(\w+)\}/g, (_, k) => params[k] ?? '');
+                }
+                return key;
+            }
+
+            function setLang(l) {
+                lang.value = l;
+                localStorage.setItem('lang', l);
+            }
+
+            function navClass(view) {
+                return ['px-3 py-2 text-sm font-medium rounded-md', currentView.value === view ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:text-gray-700'];
+            }
+
+            function formatCurrency(amount) {
+                return lang.value === 'zh' ? `¥${amount.toFixed(2)}` : `$${(amount / 7).toFixed(2)}`;
+            }
+
+            // API调用
+            async function loadDashboard() {
+                try { stats.value = await (await fetch(`${API_BASE}/dashboard`)).json(); } catch (e) { console.error(e); }
+            }
+
+            async function loadRealtime() {
+                try { realtime.value = await (await fetch(`${API_BASE}/dashboard/realtime`)).json(); isConnected.value = true; } catch (e) { isConnected.value = false; }
+            }
+
+            async function loadWorkers() {
+                const params = new URLSearchParams({ page: workerPage.value });
+                if (workerFilter.status) params.append('status', workerFilter.status);
+                if (workerFilter.region) params.append('region', workerFilter.region);
+                try { workers.value = await (await fetch(`${API_BASE}/workers?${params}`)).json(); } catch (e) { console.error(e); }
+            }
+
+            async function loadEnterprises() {
+                try { enterprises.value = await (await fetch(`${API_BASE}/enterprises`)).json(); } catch (e) { console.error(e); }
+            }
+
+            async function loadUsageRecords() {
+                try { usageRecords.value = await (await fetch(`${API_BASE}/usage/records?page=1&page_size=50`)).json(); } catch (e) { console.error(e); }
+            }
+
+            async function loadUsageSummary() {
+                const params = new URLSearchParams({ group_by: usageFilter.groupBy, start_time: usageFilter.startDate, end_time: usageFilter.endDate });
+                try {
+                    const data = await (await fetch(`${API_BASE}/usage/summary?${params}`)).json();
+                    usageSummary.value = {
+                        totalJobs: data.items?.reduce((sum, i) => sum + (i.total_jobs || 0), 0) || 0,
+                        totalGpuHours: data.items?.reduce((sum, i) => sum + ((i.total_gpu_seconds || 0) / 3600), 0) || 0,
+                        totalRevenue: data.items?.reduce((sum, i) => sum + (i.total_cost || 0), 0) || 0
+                    };
+                } catch (e) { console.error(e); }
+            }
+
+            async function loadBills() {
+                const params = new URLSearchParams();
+                if (billFilter.status) params.append('status', billFilter.status);
+                try { bills.value = await (await fetch(`${API_BASE}/bills?${params}`)).json(); } catch (e) { console.error(e); }
+            }
+
+            async function viewWorkerDetail(id) {
+                try {
+                    const data = await (await fetch(`${API_BASE}/workers/${id}`)).json();
+                    selectedWorker.value = data.worker;
+                    workerUsage24h.value = data.usage_24h;
+                    showWorkerDetail.value = true;
+                } catch (e) { console.error(e); }
+            }
+
+            async function createEnterprise() {
+                try {
+                    const res = await fetch(`${API_BASE}/enterprises`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newEnterprise)
+                    });
+                    if (res.ok) {
+                        showCreateEnterprise.value = false;
+                        Object.assign(newEnterprise, { name: '', code: '', contact_name: '', contact_email: '', monthly_budget: null, data_retention_days: 30, allow_logging: true, anonymize_data: false });
+                        loadEnterprises();
+                    }
+                } catch (e) { console.error(e); }
+            }
+
+            function getStatusClass(status) { return { online: 'status-online', busy: 'status-busy', offline: 'status-offline' }[status] || 'status-offline'; }
+            function getStatusBadge(status) { return { online: 'bg-green-100 text-green-800', busy: 'bg-yellow-100 text-yellow-800', offline: 'bg-gray-100 text-gray-800' }[status] || 'bg-gray-100 text-gray-800'; }
+            function getStatusText(status) { return t(`status.${status}`) || status; }
+            function getReliabilityColor(score) { if (score >= 0.8) return 'bg-green-500'; if (score >= 0.6) return 'bg-yellow-500'; return 'bg-red-500'; }
+            function getBillStatusBadge(status) { return { pending: 'bg-yellow-100 text-yellow-800', paid: 'bg-green-100 text-green-800', overdue: 'bg-red-100 text-red-800' }[status] || 'bg-gray-100 text-gray-800'; }
+            function getBillStatusText(status) { return t(`bill.${status}`) || status; }
+            function getRegionName(code) { const r = regions.find(r => r.code === code); return r ? r.name[lang.value] : code; }
+            function formatDateTime(dateStr) { if (!dateStr) return '-'; return new Date(dateStr).toLocaleString(lang.value === 'zh' ? 'zh-CN' : 'en-US'); }
+            function formatDate(dateStr) { if (!dateStr) return '-'; return new Date(dateStr).toLocaleDateString(lang.value === 'zh' ? 'zh-CN' : 'en-US'); }
+            function formatRelativeTime(dateStr) { if (!dateStr) return '-'; const diff = (Date.now() - new Date(dateStr).getTime()) / 1000; if (diff < 60) return `${Math.round(diff)}s`; if (diff < 3600) return `${Math.round(diff/60)}m`; if (diff < 86400) return `${Math.round(diff/3600)}h`; return `${Math.round(diff/86400)}d`; }
+            function formatDuration(seconds) { if (!seconds) return '-'; const h = Math.floor(seconds / 3600); const m = Math.floor((seconds % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m`; }
+            function copyMachineId(id) { if (id) navigator.clipboard.writeText(id); }
+            function exportWorkers() { alert('Export workers to CSV'); }
+            function exportUsage() { alert('Export usage records'); }
+            function openWorkerConfig(id) { alert('Configure worker: ' + id); }
+            function manageApiKeys(id) { alert('Manage API keys: ' + id); }
+            function viewBillDetail(id) { alert('Bill detail: ' + id); }
+            function updateTime() { currentTime.value = new Date().toLocaleString(lang.value === 'zh' ? 'zh-CN' : 'en-US'); }
+
+            // 查看企业详情 - 打开隐私设置
+            async function viewEnterpriseDetail(id) {
+                try {
+                    selectedEnterprise.value = enterprises.value.items.find(e => e.id === id);
+                    await loadPrivacySettings(id);
+                    await loadComplianceReport(id);
+                    await loadRetentionStatus(id);
+                    showPrivacySettings.value = true;
+                } catch (e) { console.error(e); }
+            }
+
+            // 加载隐私设置
+            async function loadPrivacySettings(enterpriseId) {
+                try {
+                    privacySettings.value = await (await fetch(`${API_BASE}/enterprises/${enterpriseId}/privacy`)).json();
+                } catch (e) { console.error(e); privacySettings.value = null; }
+            }
+
+            // 加载合规报告
+            async function loadComplianceReport(enterpriseId) {
+                try {
+                    complianceReport.value = await (await fetch(`${API_BASE}/enterprises/${enterpriseId}/privacy/compliance`)).json();
+                } catch (e) { console.error(e); complianceReport.value = null; }
+            }
+
+            // 加载数据保留状态
+            async function loadRetentionStatus(enterpriseId) {
+                try {
+                    retentionStatus.value = await (await fetch(`${API_BASE}/enterprises/${enterpriseId}/privacy/retention-status`)).json();
+                } catch (e) { console.error(e); retentionStatus.value = null; }
+            }
+
+            // 保存隐私设置
+            async function savePrivacySettings() {
+                if (!selectedEnterprise.value || !privacySettings.value) return;
+                try {
+                    const res = await fetch(`${API_BASE}/enterprises/${selectedEnterprise.value.id}/privacy?changed_by=admin`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            data_retention_days: privacySettings.value.data_retention_days,
+                            allow_logging: privacySettings.value.allow_logging,
+                            anonymize_data: privacySettings.value.anonymize_data,
+                            private_deployment: privacySettings.value.private_deployment
+                        })
+                    });
+                    if (res.ok) {
+                        alert(lang.value === 'zh' ? '隐私设置已保存' : 'Privacy settings saved');
+                        loadEnterprises();
+                    }
+                } catch (e) { console.error(e); }
+            }
+
+            // 执行数据清理
+            async function runDataCleanup() {
+                if (!selectedEnterprise.value) return;
+                if (!confirm(lang.value === 'zh' ? '确定要执行数据清理吗？这将删除过期的数据记录。' : 'Are you sure to run data cleanup? This will delete expired records.')) return;
+                try {
+                    const res = await fetch(`${API_BASE}/enterprises/${selectedEnterprise.value.id}/privacy/cleanup`, { method: 'POST' });
+                    if (res.ok) {
+                        const result = await res.json();
+                        alert(lang.value === 'zh'
+                            ? `清理完成！删除了 ${result.cleanup_stats?.usage_records_deleted || 0} 条记录`
+                            : `Cleanup completed! Deleted ${result.cleanup_stats?.usage_records_deleted || 0} records`);
+                        await loadRetentionStatus(selectedEnterprise.value.id);
+                    }
+                } catch (e) { console.error(e); }
+            }
+
+            // 导出企业数据
+            async function exportEnterpriseData() {
+                if (!selectedEnterprise.value) return;
+                try {
+                    const res = await fetch(`${API_BASE}/enterprises/${selectedEnterprise.value.id}/privacy/export?exporter_id=admin&include_sensitive=false`, { method: 'POST' });
+                    if (res.ok) {
+                        const result = await res.json();
+                        const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `enterprise_${selectedEnterprise.value.id}_export.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }
+                } catch (e) { console.error(e); }
+            }
+
+            // 确认删除数据
+            async function confirmDeleteData() {
+                if (!selectedEnterprise.value) return;
+                const confirmMsg = lang.value === 'zh'
+                    ? '警告：此操作将永久删除该企业的所有使用记录和账单数据，且无法恢复！\n\n请输入企业代码确认删除：'
+                    : 'WARNING: This will permanently delete all usage records and bills for this enterprise!\n\nEnter enterprise code to confirm:';
+                const input = prompt(confirmMsg);
+                if (input !== selectedEnterprise.value?.name?.slice(0, 10)) {
+                    alert(lang.value === 'zh' ? '确认失败，操作已取消' : 'Confirmation failed, operation cancelled');
+                    return;
+                }
+                try {
+                    const res = await fetch(`${API_BASE}/enterprises/${selectedEnterprise.value.id}/privacy/data?requester_id=admin&confirm=true`, { method: 'DELETE' });
+                    if (res.ok) {
+                        const result = await res.json();
+                        alert(lang.value === 'zh'
+                            ? `数据已删除！删除了 ${result.deleted?.usage_records || 0} 条使用记录和 ${result.deleted?.bills || 0} 条账单`
+                            : `Data deleted! Removed ${result.deleted?.usage_records || 0} usage records and ${result.deleted?.bills || 0} bills`);
+                        showPrivacySettings.value = false;
+                        loadEnterprises();
+                    }
+                } catch (e) { console.error(e); }
+            }
+
+            watch(currentView, (view) => {
+                if (view === 'workers') loadWorkers();
+                if (view === 'enterprises') loadEnterprises();
+                if (view === 'usage') { loadUsageRecords(); loadUsageSummary(); }
+                if (view === 'bills') loadBills();
+            });
+
+            watch([() => workerFilter.status, () => workerFilter.region, workerPage], loadWorkers);
+
+            let realtimeInterval;
+            onMounted(() => {
+                updateTime(); setInterval(updateTime, 1000);
+                loadDashboard(); loadRealtime();
+                realtimeInterval = setInterval(loadRealtime, 5000);
+            });
+            onUnmounted(() => { clearInterval(realtimeInterval); });
+
+            return {
+                lang, setLang, t, currentView, currentTime, isConnected, navClass,
+                stats, realtime, workers, enterprises, usageRecords, usageSummary, bills,
+                workerFilter, workerPage, usageFilter, billFilter,
+                showCreateEnterprise, showWorkerDetail, selectedWorker, workerUsage24h, newEnterprise,
+                showPrivacySettings, selectedEnterprise, privacySettings, complianceReport, retentionStatus,
+                regions: regions.map(r => ({ code: r.code, name: r.name[lang.value] })),
+                loadDashboard, loadRealtime, loadWorkers, loadEnterprises, loadUsageRecords, loadUsageSummary, loadBills, viewWorkerDetail, createEnterprise,
+                getStatusClass, getStatusBadge, getStatusText, getReliabilityColor, getBillStatusBadge, getBillStatusText, getRegionName,
+                formatCurrency, formatDateTime, formatDate, formatRelativeTime, formatDuration,
+                copyMachineId, exportWorkers, exportUsage, openWorkerConfig, viewEnterpriseDetail, manageApiKeys, viewBillDetail,
+                savePrivacySettings, runDataCleanup, exportEnterpriseData, confirmDeleteData
+            };
+        }
+    }).mount('#app');
+    </script>
+</body>
+</html>

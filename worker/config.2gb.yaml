@@ -1,0 +1,32 @@
+# 2GB 显存配置
+name: "Worker-2GB"
+region: "asia-east"
+country: "China"
+city: "Shanghai"
+
+server:
+  url: "http://服务器A的IP:8880"  # 修改为服务器A的实际IP
+  timeout: 30
+  verify_ssl: false
+
+gpu:
+  device_id: 0
+  enable_cpu_offload: true
+
+# 2GB显存只能运行小模型
+supported_types:
+  - whisper
+  # - embedding
+
+engines:
+  whisper:
+    model_id: "openai/whisper-small"  # 约2GB显存
+  # embedding:
+  #   model_id: "BAAI/bge-small-zh-v1.5"  # 约0.5GB
+
+heartbeat_interval: 30
+poll_interval: 2
+
+load_control:
+  acceptance_rate: 1.0
+  max_concurrent_jobs: 1

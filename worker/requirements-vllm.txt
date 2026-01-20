@@ -1,0 +1,15 @@
+# vLLM 高性能推理后端依赖
+# 安装: pip install -r requirements-vllm.txt
+
+# 核心依赖
+vllm>=0.6.0
+
+# 注意: vLLM 需要:
+# - CUDA 11.8+ 或 12.x
+# - Python 3.8+
+# - Linux (Windows 需要 WSL2)
+
+# 可选量化支持
+# bitsandbytes>=0.42.0  # INT8/NF4 量化
+# auto-gptq>=0.7.0      # GPTQ 量化
+# autoawq>=0.2.0        # AWQ 量化

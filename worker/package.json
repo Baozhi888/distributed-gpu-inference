@@ -1,0 +1,51 @@
+{
+  "name": "gpu-worker",
+  "version": "1.0.0",
+  "description": "分布式GPU推理 Worker 节点 - 共享空闲GPU算力",
+  "keywords": [
+    "gpu",
+    "inference",
+    "distributed",
+    "machine-learning",
+    "llm",
+    "stable-diffusion",
+    "cuda"
+  ],
+  "author": "GPU Sharing Project",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-repo/distributed-gpu-inference"
+  },
+  "bin": {
+    "gpu-worker": "./bin/gpu-worker.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js",
+    "start": "node bin/gpu-worker.js start",
+    "configure": "node bin/gpu-worker.js configure",
+    "status": "node bin/gpu-worker.js status"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "os": [
+    "win32",
+    "linux",
+    "darwin"
+  ],
+  "files": [
+    "bin/",
+    "scripts/",
+    "python/",
+    "*.py",
+    "requirements.txt"
+  ],
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "inquirer": "^8.2.6",
+    "ora": "^5.4.1",
+    "which": "^3.0.1"
+  }
+}

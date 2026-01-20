@@ -1,0 +1,29 @@
+# 8GB 显存配置
+name: "Worker-8GB"
+region: "asia-east"
+country: "China"
+city: "Shanghai"
+
+server:
+  url: "http://127.0.0.1:8880"
+  timeout: 30
+  verify_ssl: false
+
+gpu:
+  device_id: 0
+  enable_cpu_offload: true  # 显存不足时使用CPU内存
+
+# 8GB显存推荐只运行一种任务
+supported_types:
+  - llm
+
+engines:
+  llm:
+    model_id: "Qwen/Qwen2.5-1.5B-Instruct"  # 约3GB显存
+
+heartbeat_interval: 30
+poll_interval: 2
+
+load_control:
+  acceptance_rate: 1.0
+  max_concurrent_jobs: 1

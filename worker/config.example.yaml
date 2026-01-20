@@ -1,0 +1,72 @@
+# Worker配置示例 - 增强版
+
+# Worker标识（首次运行后会自动填充）
+worker_id: null
+token: null
+name: "My GPU Worker"
+
+# 地理信息（重要：影响任务分配）
+region: "asia-east"      # 区域代码，见下方说明
+country: "China"
+city: "Shanghai"
+timezone: "Asia/Shanghai"
+
+# 区域代码说明：
+# - asia-east: 东亚（中国、日本、韩国）
+# - asia-south: 东南亚（新加坡、泰国）
+# - europe-west: 西欧（德国、法国、英国）
+# - europe-east: 东欧
+# - america-north: 北美（美国、加拿大）
+# - america-south: 南美
+# - oceania: 大洋洲（澳大利亚）
+
+# 服务器配置
+server:
+  url: "http://localhost:8000"  # 中央服务器地址
+  timeout: 30
+  verify_ssl: true
+
+# GPU配置
+gpu:
+  enable_cpu_offload: true      # 启用CPU Offload节省显存
+  max_memory_gb: null           # 限制最大显存使用（null=不限制）
+  device_id: 0                  # 使用的GPU设备ID
+
+# 直连配置（可选，用于P2P低延迟场景）
+direct:
+  enabled: false                # 是否启用直连服务
+  host: "0.0.0.0"
+  port: 8080
+  public_url: null              # 公网可访问的URL，如 "http://your-ip:8080"
+
+# 支持的任务类型
+supported_types:
+  - "llm"
+  - "image_gen"
+  # - "whisper"
+  # - "embedding"
+
+# 引擎配置
+engines:
+  llm:
+    model_id: "Qwen/Qwen2.5-7B-Instruct"
+    # 可选配置：
+    # max_new_tokens: 2048
+    # temperature: 0.7
+
+  image_gen:
+    model_id: "black-forest-labs/FLUX.1-schnell"
+    # 可选配置：
+    # default_steps: 4
+    # default_width: 1024
+    # default_height: 1024
+
+  # whisper:
+  #   model_id: "openai/whisper-large-v3"
+
+  # embedding:
+  #   model_id: "BAAI/bge-large-zh-v1.5"
+
+# 轮询配置
+heartbeat_interval: 30   # 心跳间隔（秒）
+poll_interval: 2         # 任务轮询间隔（秒）

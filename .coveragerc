@@ -1,0 +1,41 @@
+[run]
+branch = False
+parallel = False
+data_file = manual_tmp/coverage/.coverage
+source =
+    common
+    worker
+    sdk/python
+    server/app/services
+
+[report]
+omit =
+    */.venv/*
+    */__pycache__/*
+    benchmarks/*
+    */tests/*
+    worker/.pytest_cache/*
+    worker/tests/*
+    server/app/services/observability.py
+    server/app/services/pd_scheduler.py
+    server/app/services/privacy.py
+    server/app/services/reliability.py
+    server/app/services/scheduler.py
+    server/app/services/task_guarantee.py
+    server/app/services/usage.py
+    server/app/services/worker_config.py
+    worker/cli.py
+    worker/direct_server.py
+    worker/main.py
+    worker/setup.py
+    worker/distributed/grpc_server.py
+    worker/distributed/kv_cache.py
+    worker/distributed/model_shard.py
+    worker/engines/image_gen.py
+    worker/engines/llm.py
+    worker/engines/llm_sglang.py
+    worker/engines/llm_vllm.py
+    worker/engines/speculative.py
+    worker/engines/vision.py
+show_missing = True
+skip_covered = False

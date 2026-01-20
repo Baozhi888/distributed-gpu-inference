@@ -1,0 +1,194 @@
+// 分布式推理 gRPC 协议定义
+// 用于 Worker 间的 P2P 通信
+
+syntax = "proto3";
+
+package distributed_inference;
+
+option python_generic_services = true;
+
+// 分布式推理服务
+service DistributedInference {
+    // 流式推理（支持 server-to-server 转发）
+    rpc StreamInference(stream InferenceRequest) returns (stream InferenceResponse);
+
+    // 单次前向传播
+    rpc Forward(ForwardRequest) returns (ForwardResponse);
+
+    // KV-Cache 传输
+    rpc TransferKVCache(KVCacheRequest) returns (KVCacheResponse);
+
+    // 会话管理
+    rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+    rpc CloseSession(CloseSessionRequest) returns (CloseSessionResponse);
+
+    // 健康检查
+    rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// 推理请求
+message InferenceRequest {
+    string session_id = 1;
+    string step_id = 2;
+
+    // 输入数据
+    bytes hidden_states = 3;        // 序列化的 Tensor
+    repeated int64 shape = 4;       // Tensor 形状
+    string dtype = 5;               // 数据类型
+
+    // 位置信息
+    int32 position = 6;
+
+    // KV-Cache 键
+    repeated string kv_cache_keys = 7;
+
+    // 路由信息（用于 server-to-server）
+    string next_worker_address = 8;
+    string next_session_id = 9;
+
+    // 元数据
+    map<string, string> metadata = 10;
+}
+
+// 推理响应
+message InferenceResponse {
+    string session_id = 1;
+    string step_id = 2;
+
+    // 输出数据
+    bytes hidden_states = 3;
+    repeated int64 shape = 4;
+    string dtype = 5;
+
+    // 更新的 KV-Cache 键
+    repeated string updated_kv_keys = 6;
+
+    // 性能指标
+    int64 latency_ms = 7;
+    int32 tokens_processed = 8;
+
+    // 状态
+    bool success = 9;
+    string error_message = 10;
+}
+
+// 前向传播请求
+message ForwardRequest {
+    string session_id = 1;
+
+    // 输入
+    bytes input = 2;
+    repeated int64 shape = 3;
+    string dtype = 4;
+
+    // 层范围
+    int32 start_layer = 5;
+    int32 end_layer = 6;
+
+    // 位置
+    int32 position = 7;
+
+    // KV-Cache
+    repeated string kv_cache_keys = 8;
+    bool use_cache = 9;
+}
+
+// 前向传播响应
+message ForwardResponse {
+    bytes output = 1;
+    repeated int64 shape = 2;
+    string dtype = 3;
+
+    repeated string updated_kv_keys = 4;
+
+    bool success = 5;
+    string error_message = 6;
+    int64 latency_ms = 7;
+}
+
+// KV-Cache 传输请求
+message KVCacheRequest {
+    string prefix_key = 1;
+
+    // 层范围
+    int32 start_layer = 2;
+    int32 end_layer = 3;
+
+    // KV 数据（每层一个）
+    repeated KVCacheLayer layers = 4;
+}
+
+message KVCacheLayer {
+    int32 layer_idx = 1;
+    bytes keys = 2;       // 序列化的 keys tensor
+    bytes values = 3;     // 序列化的 values tensor
+    repeated int64 shape = 4;
+    string dtype = 5;
+}
+
+// KV-Cache 传输响应
+message KVCacheResponse {
+    bool success = 1;
+    string error_message = 2;
+    int64 bytes_transferred = 3;
+    int64 latency_ms = 4;
+}
+
+// 创建会话请求
+message CreateSessionRequest {
+    string model_name = 1;
+    int32 max_length = 2;
+
+    // 层范围
+    int32 start_layer = 3;
+    int32 end_layer = 4;
+
+    // 配置
+    float temperature = 5;
+    float top_p = 6;
+    int32 max_new_tokens = 7;
+}
+
+// 创建会话响应
+message CreateSessionResponse {
+    string session_id = 1;
+    bool success = 2;
+    string error_message = 3;
+
+    // 会话信息
+    int32 cache_tokens_available = 4;
+}
+
+// 关闭会话请求
+message CloseSessionRequest {
+    string session_id = 1;
+}
+
+// 关闭会话响应
+message CloseSessionResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
+// 健康检查请求
+message HealthCheckRequest {
+    bool include_stats = 1;
+}
+
+// 健康检查响应
+message HealthCheckResponse {
+    bool healthy = 1;
+    string worker_id = 2;
+    string status = 3;
+
+    // 资源信息
+    float gpu_memory_used_gb = 4;
+    float gpu_memory_total_gb = 5;
+    int32 active_sessions = 6;
+    int32 cache_tokens_used = 7;
+    int32 cache_tokens_available = 8;
+
+    // 性能指标
+    float throughput_tokens_per_sec = 9;
+    float avg_latency_ms = 10;
+}
