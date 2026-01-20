@@ -1,0 +1,49 @@
+# Python cache - MUST exclude
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+*.egg-info/
+
+# Development files
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Config files with secrets
+.env
+.env.*
+config.yaml
+config.yml
+
+# Test files
+tests/
+*.test.py
+test_*.py
+
+# Docker
+Dockerfile
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+
+# Large files
+*.bin
+*.safetensors
+*.ckpt
+*.pt
+*.pth

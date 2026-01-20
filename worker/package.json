@@ -1,7 +1,7 @@
 {
   "name": "gpu-worker",
   "version": "1.0.0",
-  "description": "分布式GPU推理 Worker 节点 - 共享空闲GPU算力",
+  "description": "Distributed GPU Inference Worker - Share idle GPU computing power for LLM and image generation",
   "keywords": [
     "gpu",
     "inference",
@@ -9,13 +9,22 @@
     "machine-learning",
     "llm",
     "stable-diffusion",
-    "cuda"
+    "cuda",
+    "pytorch",
+    "transformers",
+    "vllm",
+    "sglang"
   ],
-  "author": "GPU Sharing Project",
+  "author": "Baozhi888 <kj331704@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-repo/distributed-gpu-inference"
+    "url": "git+https://github.com/Baozhi888/distributed-gpu-inference.git",
+    "directory": "worker"
+  },
+  "homepage": "https://github.com/Baozhi888/distributed-gpu-inference#readme",
+  "bugs": {
+    "url": "https://github.com/Baozhi888/distributed-gpu-inference/issues"
   },
   "bin": {
     "gpu-worker": "./bin/gpu-worker.js"
@@ -37,9 +46,13 @@
   "files": [
     "bin/",
     "scripts/",
-    "python/",
+    "engines/",
+    "distributed/",
     "*.py",
-    "requirements.txt"
+    "*.yaml",
+    "*.txt",
+    "!.env*",
+    "README.md"
   ],
   "dependencies": {
     "chalk": "^4.1.2",
