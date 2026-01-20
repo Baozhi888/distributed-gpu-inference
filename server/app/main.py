@@ -13,6 +13,7 @@ from app.db.database import init_db, AsyncSessionLocal
 from app.api import jobs, workers
 from app.api import admin
 from app.services.task_guarantee import TaskGuaranteeBackgroundWorker
+from app.services import geo
 
 logging.basicConfig(
     level=logging.INFO if not settings.debug else logging.DEBUG,
@@ -42,6 +43,10 @@ async def lifespan(app: FastAPI):
         await background_task
     except asyncio.CancelledError:
         pass
+    
+    # 清理地理位置服务资源
+    await geo.cleanup_resources()
+    
     logger.info("Server shutdown complete")
 
 

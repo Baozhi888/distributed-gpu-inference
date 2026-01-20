@@ -1,5 +1,6 @@
 """服务端配置"""
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import Optional, List
 
 
@@ -7,6 +8,16 @@ class Settings(BaseSettings):
     # 应用配置
     app_name: str = "Distributed GPU Inference"
     debug: bool = False
+
+    @field_validator('debug', mode='before')
+    @classmethod
+    def parse_debug(cls, v):
+        """解析debug字段，支持多种格式"""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ('true', '1', 'yes', 'on')
+        return bool(v)
 
     # 区域配置
     region: str = "asia-east"  # 当前服务器所在区域
